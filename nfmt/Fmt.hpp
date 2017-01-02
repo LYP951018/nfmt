@@ -29,18 +29,18 @@ namespace detail
         {}
 
         template<typename T, typename = std::void_t<decltype(to_string(std::declval<T>()))>>
-        void operator()(std::reference_wrapper<T> ref) const noexcept
+        void operator()(std::reference_wrapper<T> ref) const
         {
             using std::to_string;
             str_.append(to_string(ref.get()));
         }
 
-        void operator()(std::reference_wrapper<const std::string> ref) const noexcept
+        void operator()(std::reference_wrapper<const std::string> ref) const
         {
             str_.append(ref.get());
         }
 
-        void operator()(std::reference_wrapper<const std::string_view> ref) const noexcept
+        void operator()(std::reference_wrapper<const std::string_view> ref) const
         {
             str_.append(ref.get());
         }
