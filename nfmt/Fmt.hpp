@@ -2,7 +2,6 @@
 
 #include <string>
 #include <variant>
-#include <utility>          //std::forward
 #include <array>            //std::array
 #include <tuple>            //std::tuple std::tuple_cat
 #include <stdexcept>
@@ -16,51 +15,79 @@ public:
     FormatError(std::string_view errorMessage);
 };
 
-template<typename... Args>
-void Append(std::string& str, const std::variant<Args...>& v)
+namespace detail
 {
-    std::visit([&](const auto& value) {
-        using std::to_string;
-        str.append(to_string(value));
-    }, v);
+    using std::to_string;
+
+    struct AppendVisitor
+    {
+        std::string& str_;
+
+        AppendVisitor(std::string& s) noexcept
+            : str_{ s }
+        {}
+
+        template<typename T, typename = std::void_t<decltype(to_string(std::declval<T>()))>>
+        void operator()(std::reference_wrapper<T> ref) const noexcept
+        {
+            using std::to_string;
+            str_.append(to_string(ref.get()));
+        }
+
+        void operator()(std::reference_wrapper<const std::string> ref) const noexcept
+        {
+            str_.append(ref.get());
+        }
+
+        void operator()(std::reference_wrapper<const std::string_view> ref) const noexcept
+        {
+            str_.append(ref.get());
+        }
+    };
+
+    template<typename... Args>
+    void Append(std::string& str, const std::variant<Args...>& v)
+    {
+        std::visit(AppendVisitor{ str }, v);
+    }
+
+    template<typename T, typename... Args>
+    using is_one_of = std::disjunction<std::is_same<T, Args>...>;
+
+    template<typename... Args>
+    struct Unique;
+
+    template<typename T, typename... Args>
+    struct Unique<T, Args...>
+    {
+        using type = decltype(std::tuple_cat(std::declval<std::conditional_t<is_one_of<T, Args...>::value,
+            std::tuple<>,
+            std::tuple<T>>>(), std::declval<typename Unique<Args...>::type>()));
+    };
+
+    template<typename T>
+    struct Unique<T>
+    {
+        using type = std::tuple<T>;
+    };
+
+    template<typename... Args>
+    using UniqueType = typename Unique<Args...>::type;
+
+    template<typename... Args>
+    std::variant<Args...> FromTuple(std::tuple<Args...>);
+
+    template<typename... Args>
+    using UniqueVariant = decltype(FromTuple(std::declval<UniqueType<Args...>>()));
 }
 
-template<typename T, typename... Args>
-using is_one_of = std::disjunction<std::is_same<T, Args>...>;
 
 template<typename... Args>
-struct Unique;
-
-template<typename T, typename... Args>
-struct Unique<T, Args...>
-{
-    using type = decltype(std::tuple_cat(std::declval<std::conditional_t<is_one_of<T, Args...>::value,
-        std::tuple<>,
-        std::tuple<T>>>(), std::declval<typename Unique<Args...>::type>()));
-};
-
-template<typename T>
-struct Unique<T>
-{
-    using type = std::tuple<T>;
-};
-
-template<typename... Args>
-using UniqueType = typename Unique<Args...>::type;
-
-template<typename... Args>
-std::variant<Args...> FromTuple(std::tuple<Args...>);
-
-template<typename... Args>
-using UniqueVariant = decltype(FromTuple(std::declval<UniqueType<Args...>>()));
-
-
-template<typename... Args>
-std::string Format(std::string_view format, Args&&... args)
+std::string Format(std::string_view format, const Args&... args)
 {
     std::string result;
     auto current = format.begin();
-    std::array<UniqueVariant<std::decay_t<Args>...>, sizeof...(Args)> argsList{ std::forward<Args>(args)... };
+    std::array<detail::UniqueVariant<std::reference_wrapper<std::add_const_t<Args>>...>, sizeof...(Args)> argsList{ std::ref(args)... };
     std::size_t currentArg = {};
 
     const auto ThrowErrorAt = [format](typename std::string_view::iterator pos)
@@ -90,7 +117,7 @@ std::string Format(std::string_view format, Args&&... args)
                     {
                         throw FormatError{ "Argument out of bound at pos "s + std::to_string(current - format.begin()) };
                     }
-                    Append(result, argsList[currentArg]);
+                    detail::Append(result, argsList[currentArg]);
                     ++current;
                     ++currentArg;
                 }
