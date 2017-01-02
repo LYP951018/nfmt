@@ -9,7 +9,7 @@
 #include <type_traits>
 #include <string_view>      //std::string_view
 
-class FormatError : std::invalid_argument
+class FormatError : public std::invalid_argument
 {
 public:
     FormatError(std::size_t pos);
