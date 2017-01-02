@@ -4,6 +4,7 @@
 #include <variant>
 #include <array>            //std::array
 #include <tuple>            //std::tuple std::tuple_cat
+#include <functional>       //std::reference_wrapper
 #include <stdexcept>
 #include <type_traits>
 #include <string_view>      //std::string_view
